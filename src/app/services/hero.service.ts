@@ -1,7 +1,13 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, combineLatest, Observable } from 'rxjs';
-import { debounceTime, map, shareReplay, switchMap } from 'rxjs/operators';
+import {
+    debounceTime,
+    distinctUntilChanged,
+    map,
+    shareReplay,
+    switchMap,
+} from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 export interface Hero {
@@ -52,13 +58,26 @@ const DEFAULT_PAGE = 0;
 export class HeroService {
     limits = LIMITS;
     //this pattern is service with a subject (aka observable services/reactive services)
-    searchBS = new BehaviorSubject<string>(DEFAULT_SEARCH);
-    limitBS = new BehaviorSubject<number>(DEFAULT_LIMIT);
-    pageBS = new BehaviorSubject<number>(DEFAULT_PAGE);
+    private searchBS = new BehaviorSubject<string>(DEFAULT_SEARCH);
+    private limitBS = new BehaviorSubject<number>(DEFAULT_LIMIT);
+    private pageBS = new BehaviorSubject<number>(DEFAULT_PAGE);
+
+    search$ = this.searchBS.asObservable();
+    limit$ = this.limitBS.asObservable();
+    //page$ = this.pageBS.asObservable(); //not used
 
     userPage$ = this.pageBS.pipe(map(page => page + 1));
 
-    params$ = combineLatest([this.searchBS, this.limitBS, this.pageBS]).pipe(
+    private params$ = combineLatest([
+        this.searchBS.pipe(debounceTime(500)),
+        this.limitBS,
+        this.pageBS.pipe(debounceTime(500)),
+    ]).pipe(
+        //hey if the things coming down the pipe are the same then return don't map
+        //distinct until change does a shallow comparison
+        distinctUntilChanged((prev, current) => {
+            return JSON.stringify(prev) === JSON.stringify(current);
+        }),
         map(([searchTerm, limit, page]) => {
             const params: any = {
                 apikey: environment.MARVEL_API.PUBLIC_KEY,
@@ -74,7 +93,6 @@ export class HeroService {
     );
 
     private heroesResponse$ = this.params$.pipe(
-        debounceTime(500),
         switchMap(_params => this.http.get(HERO_API, { params: _params })),
         shareReplay(1),
     );
@@ -90,6 +108,20 @@ export class HeroService {
     heroes$: Observable<Hero[]> = this.heroesResponse$.pipe(
         map((res: any) => res.data.results),
     );
+
+    doSearch(term: string) {
+        this.searchBS.next(term);
+        this.pageBS.next(DEFAULT_PAGE);
+    }
+
+    movePageBy(moveBy: number) {
+        const currentPage = this.pageBS.getValue();
+        this.pageBS.next(currentPage + moveBy);
+    }
+
+    setLimit(newLimit: number) {
+        this.limitBS.next(newLimit);
+    }
 
     constructor(private http: HttpClient) {}
 }

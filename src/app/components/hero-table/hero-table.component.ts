@@ -22,9 +22,9 @@ export class HeroTableComponent {
     //improved version(lose the need to async on the html template)
     viewModel$ = combineLatest([
         this.hero.heroes$,
-        this.hero.searchBS,
+        this.hero.search$,
         this.hero.userPage$,
-        this.hero.limitBS,
+        this.hero.limit$,
         this.hero.totalResults$,
         this.hero.totalPages$,
     ]).pipe(
@@ -45,15 +45,14 @@ export class HeroTableComponent {
     constructor(public hero: HeroService) {}
 
     doSearch(event: any) {
-        this.hero.searchBS.next(event.target.value);
+        this.hero.doSearch(event.target.value);
     }
 
     movePageBy(moveBy: number) {
-        const currentPage = this.hero.pageBS.getValue();
-        this.hero.pageBS.next(currentPage + moveBy);
+        this.hero.movePageBy(moveBy);
     }
 
     setLimit(limit: number) {
-        this.hero.limitBS.next(limit);
+        this.hero.setLimit(limit);
     }
 }
